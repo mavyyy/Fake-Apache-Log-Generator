@@ -38,12 +38,19 @@ class switch(object):
         else:
             return False
 
+def convert_unix_time(datetime_obj):
+    return int(time.mktime(datetime_obj.timetuple()))
+
 parser = argparse.ArgumentParser(__file__, description="Fake Apache Log Generator")
 parser.add_argument("--output", "-o", dest='output_type', help="Write to a Log file, a gzip file or to STDOUT", choices=['LOG','GZ','CONSOLE'] )
 parser.add_argument("--log-format", "-l", dest='log_format', help="Log format, Common or Extended Log Format ", choices=['CLF','ELF'], default="ELF" )
 parser.add_argument("--num", "-n", dest='num_lines', help="Number of lines to generate (0 for infinite)", type=int, default=1)
 parser.add_argument("--prefix", "-p", dest='file_prefix', help="Prefix the output file name", type=str)
 parser.add_argument("--sleep", "-s", help="Sleep this long between lines (in seconds)", default=0.0, type=float)
+parser.add_argument("--mode", "-m", dest="mode", help="Execution mode, batch or realtime", choices=["BATCH", "REALTIME"], default="REALTIME")
+parser.add_argument("--start", dest="start", help="Time of first log line in epoch seconds", type=float)
+parser.add_argument("--stop", dest="stop", help="Time of last log line in epoch seconds", type=float, default=-1)
+
 
 args = parser.parse_args()
 
@@ -51,11 +58,23 @@ log_lines = args.num_lines
 file_prefix = args.file_prefix
 output_type = args.output_type
 log_format = args.log_format
+mode = args.mode
+start = args.start
+stop = args.stop
 
 faker = Faker()
 
 timestr = time.strftime("%Y%m%d-%H%M%S")
-otime = datetime.datetime.now()
+
+if start is not None:
+    try:
+        otime = datetime.datetime.fromtimestamp(start)
+        end_time = datetime.datetime.fromtimestamp(stop)
+    except:
+        print("Invalid start datetime")
+        exit(1)
+else:
+    otime = datetime.datetime.now()
 
 outFileName = 'access_log_'+timestr+'.log' if not file_prefix else file_prefix+'_access_log_'+timestr+'.log'
 
@@ -106,6 +125,10 @@ while (flag):
     f.flush()
 
     log_lines = log_lines - 1
-    flag = False if log_lines == 0 else True
-    if args.sleep:
+
+    if args.stop != -1: # if stop time is specified
+        flag = False if otime > end_time else True
+    else:
+        flag = False if log_lines == 0 else True
+    if args.sleep and mode == "REALTIME":
         time.sleep(args.sleep)
